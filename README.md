@@ -1,10 +1,10 @@
-SafeStep
+StepSafe
 AI-powered diabetic foot ulcer detection and classification for faster, more accurate wound assessment.
 
 Overview
 Every 20 seconds, someone loses a limb to diabetes worldwide, and up to 80% of these amputations are preventable with early detection. Diabetic foot ulcers (DFUs) are often misclassified by clinicians 30–40% of the time, and many rural or underserved clinics lack access to wound care specialists altogether.
 
-SafeStep is a web-based clinical decision support tool that lets clinicians capture a photo of a diabetic foot ulcer and receive instant AI-driven wound classification. By turning any camera-equipped device into a virtual wound specialist, SafeStep helps standardize assessments and support earlier, more accurate interventions.
+StepSafe is a web-based clinical decision support tool that lets clinicians capture a photo of a diabetic foot ulcer and receive instant AI-driven wound classification. By turning any camera-equipped device into a virtual wound specialist, StepSafe helps standardize assessments and support earlier, more accurate interventions.
 
 Core Capabilities
 Capture or upload wound images directly from a phone or desktop browser.
