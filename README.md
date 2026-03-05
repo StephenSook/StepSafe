@@ -36,3 +36,15 @@ Backend/API: Python, FastAPI.
 AI Model: TensorFlow, trained on DFUC 2020 (4,000 images), DFUC 2021 (15,683 images), plus Kaggle DFU data.
 
 Training Environment: Google Colab Pro with A100 GP
+
+
+Team
+Stephen Sookra — Frontend & pitch.
+
+Tylin — Backend/API & model integration.
+
+Ryann — Data & model training.
+
+Benjamin Mettler — Research, literature review, and presentation support (PowerPoint).
+
+Emma Pittman — Research, article sourcing, and presentation design (PowerPoint).
