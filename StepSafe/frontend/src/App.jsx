@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { BackgroundCircles } from './components/ui/background-circles'
 import { PixelTrail } from './components/ui/pixel-trail'
 import { useScreenSize } from './components/hooks/use-screen-size'
@@ -234,10 +234,14 @@ export default function App() {
   const [woundLocation, setWoundLocation] = useState('')
   const [patientId, setPatientId] = useState('')
   const [copied, setCopied] = useState(false)
+  const [showWebcam, setShowWebcam] = useState(false)
+  const [webcamError, setWebcamError] = useState(null)
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const uploadRef = useRef(null)
   const resultsRef = useRef(null)
+  const videoRef = useRef(null)
+  const streamRef = useRef(null)
 
   const handleImageSelect = useCallback((file) => {
     if (!file) return
@@ -246,6 +250,63 @@ export default function App() {
     setShowReport(false)
     setCopied(false)
   }, [])
+
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+
+  const stopWebcam = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
+    setShowWebcam(false)
+    setWebcamError(null)
+  }, [])
+
+  const openWebcam = useCallback(async () => {
+    setWebcamError(null)
+    setShowWebcam(true)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+      }
+    } catch {
+      setWebcamError('Camera access denied. Please allow camera access in your browser settings or use the Upload Image button instead.')
+    }
+  }, [])
+
+  const captureWebcam = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d').drawImage(video, 0, 0)
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], 'capture.jpg', { type: 'image/jpeg' })
+        handleImageSelect(file)
+      }
+      stopWebcam()
+    }, 'image/jpeg', 0.92)
+  }, [handleImageSelect, stopWebcam])
+
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop())
+      }
+    }
+  }, [])
+
+  const handleTakePhoto = () => {
+    if (isMobile) {
+      cameraInputRef.current?.click()
+    } else {
+      openWebcam()
+    }
+  }
 
   const scrollToUpload = () => {
     uploadRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -377,7 +438,7 @@ export default function App() {
                   Upload Image
                 </button>
                 <button
-                  onClick={() => cameraInputRef.current?.click()}
+                  onClick={handleTakePhoto}
                   className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm border-2 border-[#0D9488] text-[#0D9488] hover:bg-teal-50 transition-colors cursor-pointer"
                 >
                   <IconCamera />
@@ -544,6 +605,70 @@ export default function App() {
             </div>
           </div>
         </section>
+      )}
+
+      {/* Webcam Modal */}
+      {showWebcam && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-semibold text-slate-800">Take Photo</h3>
+              <button
+                onClick={stopWebcam}
+                className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5">
+              {webcamError ? (
+                <div className="text-center py-8">
+                  <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-7 h-7 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm text-slate-600 leading-relaxed max-w-xs mx-auto">{webcamError}</p>
+                  <button
+                    onClick={stopWebcam}
+                    className="mt-4 px-5 py-2 rounded-xl text-sm font-semibold border border-gray-200 text-slate-500 hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="relative rounded-xl overflow-hidden bg-slate-900 aspect-video">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex gap-3 mt-4 justify-center">
+                    <button
+                      onClick={captureWebcam}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm bg-[#0D9488] text-white hover:bg-[#0F766E] transition-colors cursor-pointer"
+                    >
+                      <IconCamera />
+                      Capture
+                    </button>
+                    <button
+                      onClick={stopWebcam}
+                      className="px-6 py-2.5 rounded-xl font-semibold text-sm border border-gray-200 text-slate-500 hover:bg-gray-50 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Stats Banner */}
