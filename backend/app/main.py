@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    logger.info("Loading TensorFlow model from %s", settings.model_path)
+    logger.info("Loading model from %s", settings.model_path)
     try:
         from app.services.model_service import load_model
 

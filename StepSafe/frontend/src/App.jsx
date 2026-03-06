@@ -3,11 +3,6 @@ import { BackgroundCircles } from './components/ui/background-circles'
 import { PixelTrail } from './components/ui/pixel-trail'
 import { useScreenSize } from './components/hooks/use-screen-size'
 
-const MOCK_RESULTS = {
-  predictions: { infection: 0.87, ischemia: 0.08, gangrene: 0.03, normal: 0.02 },
-  severity_score: 0.78,
-}
-
 const CLASSIFICATIONS = ['infection', 'ischemia', 'gangrene', 'normal']
 
 const CLASS_CONFIG = {
@@ -234,8 +229,10 @@ export default function App() {
   const [woundLocation, setWoundLocation] = useState('')
   const [patientId, setPatientId] = useState('')
   const [copied, setCopied] = useState(false)
+  const [error, setError] = useState(null)
   const [showWebcam, setShowWebcam] = useState(false)
   const [webcamError, setWebcamError] = useState(null)
+  const imageFileRef = useRef(null)
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const uploadRef = useRef(null)
@@ -245,8 +242,10 @@ export default function App() {
 
   const handleImageSelect = useCallback((file) => {
     if (!file) return
+    imageFileRef.current = file
     setImagePreview(URL.createObjectURL(file))
     setResults(null)
+    setError(null)
     setShowReport(false)
     setCopied(false)
   }, [])
@@ -312,19 +311,45 @@ export default function App() {
     uploadRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  const analyzeImage = () => {
-    if (!imagePreview) return
+  const analyzeImage = async () => {
+    if (!imageFileRef.current) return
     setLoading(true)
-    setTimeout(() => {
-      setResults(MOCK_RESULTS)
-      setLoading(false)
+    setError(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('image', imageFileRef.current)
+
+      const response = await fetch('/api/v1/classify', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new Error(body?.detail || `Classification failed (${response.status})`)
+      }
+
+      const data = await response.json()
+
+      const predictions = data.class_probabilities
+      const topConfidence = data.confidence
+      const severityScore = data.predicted_class === 'normal' ? 1 - topConfidence : topConfidence
+
+      setResults({ predictions, severity_score: severityScore })
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
-    }, 1800)
+    } catch (err) {
+      setError(err.message || 'Classification failed. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const reset = () => {
+    imageFileRef.current = null
     setImagePreview(null)
     setResults(null)
+    setError(null)
     setShowReport(false)
     setCopied(false)
     setWoundLocation('')
@@ -461,6 +486,11 @@ export default function App() {
                   </div>
                 )}
               </div>
+              {error && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 text-center">
+                  {error}
+                </div>
+              )}
               <div className="flex gap-3 justify-center">
                 {!results && !loading && (
                   <button

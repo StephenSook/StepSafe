@@ -10,7 +10,11 @@ TARGET_SIZE = (224, 224)
 
 
 def preprocess_image(raw_bytes: bytes) -> np.ndarray:
-    """Convert raw image bytes to a (1, 224, 224, 3) float32 tensor normalised to [0, 1]."""
+    """Convert raw image bytes to a (1, 224, 224, 3) float32 tensor in [0, 255].
+
+    The model contains a built-in Rescaling(1/255) layer, so pixel values
+    must stay in the original [0, 255] range here.
+    """
     try:
         img = Image.open(BytesIO(raw_bytes))
     except (UnidentifiedImageError, Exception) as exc:
@@ -20,5 +24,5 @@ def preprocess_image(raw_bytes: bytes) -> np.ndarray:
     img = img.convert("RGB")
     img = img.resize(TARGET_SIZE, Image.LANCZOS)
 
-    arr = np.asarray(img, dtype=np.float32) / 255.0
+    arr = np.asarray(img, dtype=np.float32)
     return np.expand_dims(arr, axis=0)

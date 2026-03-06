@@ -1,6 +1,7 @@
 fastapi>=0.115,<1
 uvicorn[standard]>=0.32,<1
 tensorflow>=2.17,<3
+tf-keras>=2.17,<3
 pillow>=11,<12
 pydantic>=2,<3
 pydantic-settings>=2,<3
