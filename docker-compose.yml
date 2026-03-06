@@ -1,0 +1,18 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/ml_model:/app/ml_model:ro
+    env_file:
+      - ./backend/.env
+    environment:
+      - MODEL_PATH=ml_model/saved_model
+
+  frontend:
+    build: ./safestep-frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend

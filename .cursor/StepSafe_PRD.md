@@ -142,7 +142,7 @@ StepSafe addresses this by providing accessible, AI-augmented wound assessment a
 ### Directory Structure
 
 ```
-stepsafe/
+Stepsafe/
 ├── frontend/                    # React application
 │   ├── public/
 │   ├── src/
