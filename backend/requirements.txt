@@ -3,6 +3,7 @@ uvicorn[standard]>=0.32,<1
 tensorflow>=2.17,<3
 tf-keras>=2.17,<3
 pillow>=11,<12
+pillow-heif>=0.18,<1
 pydantic>=2,<3
 pydantic-settings>=2,<3
 python-multipart>=0.0.12
