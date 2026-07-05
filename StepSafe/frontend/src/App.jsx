@@ -102,7 +102,7 @@ function IconChart() {
 function ClassificationBar({ label, confidence, color, bg, isTop }) {
   const pct = (confidence * 100).toFixed(1)
   return (
-    <div className={`p-3 rounded-xl transition-all ${isTop ? 'ring-2' : ''}`} style={isTop ? { backgroundColor: bg + '60', ringColor: color } : { backgroundColor: '#f1f5f9' }}>
+    <div className="p-3 rounded-xl transition-all" style={isTop ? { backgroundColor: bg + '60', boxShadow: `0 0 0 2px ${color}` } : { backgroundColor: '#f1f5f9' }}>
       <div className="flex justify-between items-center mb-1.5">
         <span className="text-sm font-semibold text-slate-700">{label}</span>
         <span className="text-sm font-bold" style={{ color }}>{pct}%</span>
@@ -230,6 +230,7 @@ export default function App() {
   const [patientId, setPatientId] = useState('')
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState(null)
+  const [dragActive, setDragActive] = useState(false)
   const [showWebcam, setShowWebcam] = useState(false)
   const [webcamError, setWebcamError] = useState(null)
   const imageFileRef = useRef(null)
@@ -239,20 +240,40 @@ export default function App() {
   const resultsRef = useRef(null)
   const videoRef = useRef(null)
   const streamRef = useRef(null)
+  const webcamOpenRef = useRef(false)
 
   const handleImageSelect = useCallback((file) => {
     if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setError('Please choose an image file (JPG, PNG, or HEIC).')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Image exceeds the 10 MB limit. Please choose a smaller file.')
+      return
+    }
     imageFileRef.current = file
-    setImagePreview(URL.createObjectURL(file))
+    setImagePreview(prev => {
+      if (prev) URL.revokeObjectURL(prev)
+      return URL.createObjectURL(file)
+    })
     setResults(null)
     setError(null)
     setShowReport(false)
     setCopied(false)
   }, [])
 
+  const handleDrop = useCallback((e) => {
+    e.preventDefault()
+    setDragActive(false)
+    const file = e.dataTransfer?.files?.[0]
+    if (file) handleImageSelect(file)
+  }, [handleImageSelect])
+
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
 
   const stopWebcam = useCallback(() => {
+    webcamOpenRef.current = false
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop())
       streamRef.current = null
@@ -264,20 +285,32 @@ export default function App() {
   const openWebcam = useCallback(async () => {
     setWebcamError(null)
     setShowWebcam(true)
+    webcamOpenRef.current = true
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      // The user may have cancelled the modal while the permission prompt was open.
+      if (!webcamOpenRef.current) {
+        stream.getTracks().forEach(t => t.stop())
+        return
+      }
       streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
       }
-    } catch {
-      setWebcamError('Camera access denied. Please allow camera access in your browser settings or use the Upload Image button instead.')
+    } catch (err) {
+      const msg = err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError'
+        ? 'No camera was found on this device. Please use the Upload Image button instead.'
+        : 'Camera access denied. Please allow camera access in your browser settings or use the Upload Image button instead.'
+      setWebcamError(msg)
     }
   }, [])
 
   const captureWebcam = useCallback(() => {
     const video = videoRef.current
-    if (!video) return
+    if (!video || !video.videoWidth) {
+      setWebcamError('The camera is still starting up. Give it a second, then try again.')
+      return
+    }
     const canvas = document.createElement('canvas')
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
@@ -327,7 +360,13 @@ export default function App() {
 
       if (!response.ok) {
         const body = await response.json().catch(() => null)
-        throw new Error(body?.detail || `Classification failed (${response.status})`)
+        const detail = body?.detail
+        const msg = typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+            ? (detail.map(d => d?.msg).filter(Boolean).join('; ') || `Classification failed (${response.status})`)
+            : `Classification failed (${response.status})`
+        throw new Error(msg)
       }
 
       const data = await response.json()
@@ -339,7 +378,12 @@ export default function App() {
       setResults({ predictions, severity_score: severityScore })
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
     } catch (err) {
-      setError(err.message || 'Classification failed. Please try again.')
+      // A TypeError from fetch means the request never reached the server, most
+      // often the free-tier backend waking from idle (cold start can take ~1 min).
+      const msg = err instanceof TypeError
+        ? 'Could not reach the analysis server. It may be waking up from idle, which can take up to a minute. Please wait a moment and try again.'
+        : (err.message || 'Classification failed. Please try again.')
+      setError(msg)
     } finally {
       setLoading(false)
     }
@@ -347,7 +391,10 @@ export default function App() {
 
   const reset = () => {
     imageFileRef.current = null
-    setImagePreview(null)
+    setImagePreview(prev => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
     setResults(null)
     setError(null)
     setShowReport(false)
@@ -358,14 +405,23 @@ export default function App() {
 
   const copyReport = () => {
     const text = generateReportText(results, woundLocation, patientId)
-    navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    Promise.resolve(navigator.clipboard?.writeText(text))
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      })
+      .catch(() => {
+        setError('Could not copy to the clipboard. You can select the report text above and copy it manually.')
+      })
   }
 
   const exportPDF = () => {
     const text = generateReportText(results, woundLocation, patientId)
     const w = window.open('', '_blank')
+    if (!w) {
+      setError('Could not open the print view. Please allow pop-ups for this site, or use Copy to Clipboard instead.')
+      return
+    }
     w.document.write(`<html><head><title>StepSafe Report</title><style>body{font-family:monospace;white-space:pre-wrap;padding:40px;font-size:13px;line-height:1.6;color:#1e293b;max-width:700px;margin:0 auto;}@media print{body{padding:20px;}}</style></head><body>${text.replace(/</g, '&lt;')}</body></html>`)
     w.document.close()
     w.print()
@@ -445,7 +501,13 @@ export default function App() {
 
         <div className="max-w-xl mx-auto">
           {!imagePreview ? (
-            <div className="bg-white rounded-2xl border-2 border-dashed border-gray-200 p-10 text-center hover:border-[#0D9488]/40 transition-colors shadow-sm">
+            <div
+              onDragOver={e => { e.preventDefault(); setDragActive(true) }}
+              onDragEnter={e => { e.preventDefault(); setDragActive(true) }}
+              onDragLeave={e => { e.preventDefault(); setDragActive(false) }}
+              onDrop={handleDrop}
+              className={`bg-white rounded-2xl border-2 border-dashed p-10 text-center transition-colors shadow-sm ${dragActive ? 'border-[#0D9488] bg-teal-50/50' : 'border-gray-200 hover:border-[#0D9488]/40'}`}
+            >
               <div className="w-16 h-16 rounded-2xl bg-teal-50 flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-[#0D9488]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
