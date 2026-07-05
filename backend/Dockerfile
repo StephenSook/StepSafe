@@ -11,6 +11,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Model weights are gitignored; fetch them from the public repo history at build time.
+ADD https://github.com/StephenSook/StepSafe/raw/1ab06e4f9b8dfd1460d3082bbcb26ed0f0f08fb3/stepsafe_model.h5 ml_model/stepsafe_model.h5
+
 RUN addgroup --system appgroup && \
     adduser --system --ingroup appgroup appuser && \
     chown -R appuser:appgroup /app
